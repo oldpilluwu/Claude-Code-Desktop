@@ -10,6 +10,7 @@ import type { AppConfig, CreateSessionOptions, PermissionDecision, PermissionMod
 
 let mainWindow: BrowserWindow | null = null;
 const permissionWatchers = new Map<string, () => void>();
+const pendingMetas = new Map<string, SessionMeta>();
 
 const isDev = process.env.NODE_ENV === 'development';
 const DEV_URL = 'http://localhost:5173';
@@ -93,7 +94,7 @@ ipcMain.handle('session:create', (_e, opts: CreateSessionOptions) => {
     if (opts.resume) {
       touchSession(handle.id, now);
     } else {
-      upsertSession(meta);
+      pendingMetas.set(handle.id, meta);
     }
     permissionWatchers.get(handle.id)?.();
     permissionWatchers.set(
@@ -113,9 +114,14 @@ ipcMain.handle('session:create', (_e, opts: CreateSessionOptions) => {
 
 ipcMain.handle('sessions:list', () => listSessions());
 ipcMain.handle('sessions:load-transcript', (_e, id: string) => loadTranscript(id));
-ipcMain.handle('sessions:save-transcript', (_e, transcript: SessionTranscript) =>
-  saveTranscript(transcript)
-);
+ipcMain.handle('sessions:save-transcript', (_e, transcript: SessionTranscript) => {
+  const pending = pendingMetas.get(transcript.id);
+  if (pending) {
+    upsertSession(pending);
+    pendingMetas.delete(transcript.id);
+  }
+  return saveTranscript(transcript);
+});
 ipcMain.handle('sessions:remove', (_e, id: string) => {
   removeSession(id);
   removeSessionConfigDir(id);
@@ -146,13 +152,17 @@ ipcMain.handle('session:send-message', (_e, { id, message }: { id: string; messa
 
 ipcMain.handle('session:update-model', (_e, { id, model }: { id: string; model: string }) => {
   updateSessionModel(id, model);
-  patchSession(id, { model });
+  const pending = pendingMetas.get(id);
+  if (pending) pending.model = model;
+  else patchSession(id, { model });
   return true;
 });
 
 ipcMain.handle('session:update-permission-mode', (_e, { id, permissionMode }: { id: string; permissionMode: PermissionMode }) => {
   updateSessionPermissionMode(id, permissionMode);
-  patchSession(id, { permissionMode });
+  const pending = pendingMetas.get(id);
+  if (pending) pending.permissionMode = permissionMode;
+  else patchSession(id, { permissionMode });
   return true;
 });
 
@@ -163,6 +173,7 @@ ipcMain.on('session:resize', (_e, { id, cols, rows }: { id: string; cols: number
 ipcMain.on('session:kill', (_e, { id }: { id: string }) => {
   permissionWatchers.get(id)?.();
   permissionWatchers.delete(id);
+  pendingMetas.delete(id);
   killSession(id);
 });
 ipcMain.on('session:stop-run', (_e, { id }: { id: string }) => stopSessionRun(id));

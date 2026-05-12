@@ -70,6 +70,8 @@ export interface SessionMeta {
   claudeBinary: string;
   createdAt: number;
   lastActiveAt: number;
+  title?: string;
+  titleManual?: boolean;
 }
 
 export interface PersistedChatActivity {
@@ -101,6 +103,8 @@ export interface SessionTranscript {
   observedModel?: string;
   permissionMode: PermissionMode;
   updatedAt: number;
+  title?: string;
+  titleManual?: boolean;
 }
 
 export interface SessionDataEvent {

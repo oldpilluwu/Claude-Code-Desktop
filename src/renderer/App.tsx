@@ -18,8 +18,9 @@ export function App() {
 
   const liveList = sessions.live();
   const sidebarItems = useMemo<SidebarItem[]>(() => {
-    const liveIds = new Set(liveList.map((r) => r.id));
-    const liveItems: SidebarItem[] = liveList.map((record) => ({ kind: 'live', record }));
+    const visibleLive = liveList.filter((record) => record.messages.length > 0);
+    const liveIds = new Set(visibleLive.map((r) => r.id));
+    const liveItems: SidebarItem[] = visibleLive.map((record) => ({ kind: 'live', record }));
     const archivedItems: SidebarItem[] = sessions.archived
       .filter((m) => !liveIds.has(m.id))
       .map((meta) => ({ kind: 'archived', meta }));
@@ -118,6 +119,7 @@ export function App() {
             onUpdatePermissionMode={sessions.updatePermissionMode}
             onRespondPermission={sessions.respondPermission}
             onStopRun={sessions.stopRun}
+            onRename={sessions.renameSession}
             onClose={handleCloseSession}
           />
         )}

@@ -53,6 +53,16 @@ export interface SessionRecord {
   pendingToolInputs: Record<string, { activityId: string; toolName: string; partialJson: string }>;
   createdAt: number;
   currentAssistantId?: string;
+  title?: string;
+  titleManual?: boolean;
+}
+
+const TITLE_MAX_LEN = 60;
+
+function deriveTitleFromText(text: string): string {
+  const firstLine = text.split(/\r?\n/).map((s) => s.trim()).find((s) => s.length > 0) ?? '';
+  if (firstLine.length <= TITLE_MAX_LEN) return firstLine;
+  return `${firstLine.slice(0, TITLE_MAX_LEN - 1).trimEnd()}…`;
 }
 
 function mintId(): string {
@@ -303,7 +313,9 @@ function transcriptFromRecord(record: SessionRecord): SessionTranscript {
     model: record.model,
     observedModel: record.observedModel,
     permissionMode: record.permissionMode,
-    updatedAt: Date.now()
+    updatedAt: Date.now(),
+    title: record.title,
+    titleManual: record.titleManual
   };
 }
 
@@ -510,7 +522,7 @@ export function useSessions() {
           pushActivity(s, 'error', 'Claude exited', `Exit code ${exitCode}`, { exitCode }, 'error');
         }
         s.currentAssistantId = undefined;
-        saveNow(s);
+        if (s.messages.length > 0) saveNow(s);
       }
       refreshArchived();
       rerender();
@@ -557,10 +569,12 @@ export function useSessions() {
         exited: false,
         isRunning: false,
         pendingToolInputs: {},
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        title: transcript?.title,
+        titleManual: transcript?.titleManual
       };
       sessionsRef.current.set(id, record);
-      saveNow(record);
+      if (record.messages.length > 0) saveNow(record);
       await refreshArchived();
       rerender();
       return record;
@@ -591,6 +605,10 @@ export function useSessions() {
         activities: [],
         parts: [{ id: mintId(), type: 'text', text }]
       });
+      if (!session.titleManual && !session.title) {
+        const derived = deriveTitleFromText(text);
+        if (derived) session.title = derived;
+      }
       session.currentAssistantId = undefined;
       session.pendingToolInputs = {};
       getCurrentAssistant(session);
@@ -699,6 +717,38 @@ export function useSessions() {
     [refreshArchived]
   );
 
+  const renameSession = useCallback(
+    async (id: string, rawTitle: string) => {
+      const title = rawTitle.trim();
+      const session = sessionsRef.current.get(id);
+      if (session) {
+        if (title) {
+          session.title = title;
+          session.titleManual = true;
+        } else {
+          session.title = session.messages.find((m) => m.role === 'user')
+            ? deriveTitleFromText(session.messages.find((m) => m.role === 'user')!.text)
+            : undefined;
+          session.titleManual = false;
+        }
+        saveNow(session);
+        rerender();
+      } else {
+        const transcript = await api.loadTranscript(id);
+        if (!transcript) return;
+        const next: SessionTranscript = {
+          ...transcript,
+          title: title || undefined,
+          titleManual: title ? true : false,
+          updatedAt: Date.now()
+        };
+        await api.saveTranscript(next);
+      }
+      await refreshArchived();
+    },
+    [refreshArchived, rerender, saveNow]
+  );
+
   const get = useCallback((id: string) => sessionsRef.current.get(id), []);
   const live = useCallback(
     () => Array.from(sessionsRef.current.values()).sort((a, b) => b.createdAt - a.createdAt),
@@ -717,6 +767,7 @@ export function useSessions() {
     get,
     live,
     archived,
-    removeArchived
+    removeArchived,
+    renameSession
   };
 }

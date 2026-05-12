@@ -1,10 +1,9 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Brain, Check, ChevronDown, CircleStop, Code2, Command, FileText, Loader2, Send, SquareTerminal, Wrench, X } from 'lucide-react';
+import { Brain, Check, ChevronDown, CircleStop, Code2, Command, FileText, FolderGit2, Loader2, Mic, MoreHorizontal, Play, Plus, Send, ShieldCheck, SquareTerminal, Wrench, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import type { AppConfig, FileMentionSuggestion, ModelOption, PermissionMode, ProviderProfile, SlashSuggestion } from '@shared/types';
@@ -19,13 +18,20 @@ interface ChatViewProps {
   onUpdatePermissionMode: (id: string, permissionMode: PermissionMode) => void | Promise<void>;
   onRespondPermission: (id: string, allow: boolean, message?: string) => void | Promise<void>;
   onStopRun: (id: string) => void;
+  onRename: (id: string, title: string) => void | Promise<void>;
   onClose: () => void;
 }
 
-function labelFor(s: SessionRecord): string {
-  const folder = s.cwd.split(/[\\/]/).filter(Boolean).pop() ?? s.cwd;
-  return `${folder} - ${s.model || 'default'}`;
+function folderOf(cwd: string): string {
+  return cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd;
 }
+
+const PERMISSION_BADGES: Record<PermissionMode, { label: string; cls: string }> = {
+  default: { label: 'Default', cls: 'text-emerald-300/90 ring-emerald-500/40' },
+  plan: { label: 'Plan mode', cls: 'text-sky-300/90 ring-sky-500/40' },
+  acceptEdits: { label: 'Accept edits', cls: 'text-amber-300/90 ring-amber-500/40' },
+  bypass: { label: 'Full access', cls: 'text-rose-300/90 ring-rose-500/40' }
+};
 
 function iconFor(kind: ActivityKind) {
   if (kind === 'thinking') return Brain;
@@ -316,12 +322,7 @@ function ModelPicker({
   onUpdateModel: (id: string, model: string) => void | Promise<void>;
 }) {
   const [models, setModels] = useState<ModelOption[]>([]);
-  const [custom, setCustom] = useState(session.model);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    setCustom(session.model);
-  }, [session.model]);
 
   useEffect(() => {
     if (!profile) return;
@@ -333,7 +334,8 @@ function ModelPicker({
         if (!cancelled) setModels(items);
       })
       .catch(() => {
-        if (!cancelled) setModels(profile.model ? [{ id: profile.model, label: profile.model, source: 'profile' }] : []);
+        if (!cancelled)
+          setModels(profile.model ? [{ id: profile.model, label: profile.model, source: 'profile' }] : []);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -344,48 +346,40 @@ function ModelPicker({
   }, [profile]);
 
   const modelInList = models.some((model) => model.id === session.model);
+  const displayLabel =
+    session.observedModel ||
+    models.find((m) => m.id === session.model)?.label ||
+    session.model ||
+    'default';
 
   return (
-    <div className="flex items-center gap-2">
-      <Select
-        value={modelInList ? session.model : '__custom__'}
-        disabled={session.isRunning || loading}
-        onValueChange={(value) => {
-          if (value === '__custom__') return;
-          void onUpdateModel(session.id, value);
-        }}
+    <Select
+      value={modelInList ? session.model : '__custom__'}
+      disabled={session.isRunning || loading}
+      onValueChange={(value) => {
+        if (value === '__custom__') return;
+        void onUpdateModel(session.id, value);
+      }}
+    >
+      <SelectTrigger
+        title={`Requested: ${session.model || 'default'}\nActual: ${
+          session.observedModel || (session.isRunning ? 'waiting for stream' : 'not reported yet')
+        }`}
+        className="h-7 gap-1 rounded-full border-transparent bg-transparent px-2 text-xs text-foreground/85 hover:bg-accent/60 focus:ring-0 focus:ring-offset-0"
       >
-        <SelectTrigger className="h-8 w-52 text-xs">
-          <SelectValue placeholder={loading ? 'Loading models...' : 'Select model'} />
-        </SelectTrigger>
-        <SelectContent>
-          {models.map((model) => (
-            <SelectItem key={model.id} value={model.id}>
-              {model.label}
-            </SelectItem>
-          ))}
-          <SelectItem value="__custom__">
-            {!modelInList && session.model ? session.model : 'Custom model'}
+        <span className="truncate">{loading ? 'Loading…' : displayLabel}</span>
+      </SelectTrigger>
+      <SelectContent>
+        {models.map((model) => (
+          <SelectItem key={model.id} value={model.id}>
+            {model.label}
           </SelectItem>
-        </SelectContent>
-      </Select>
-      <Input
-        value={custom}
-        disabled={session.isRunning}
-        onChange={(e) => setCustom(e.target.value)}
-        onBlur={() => {
-          const next = custom.trim();
-          if (next && next !== session.model) void onUpdateModel(session.id, next);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.currentTarget.blur();
-          }
-        }}
-        className="h-8 w-52 text-xs"
-        placeholder="Custom model"
-      />
-    </div>
+        ))}
+        <SelectItem value="__custom__">
+          {!modelInList && session.model ? session.model : 'Custom model'}
+        </SelectItem>
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -396,33 +390,29 @@ function PermissionModePicker({
   session: SessionRecord;
   onUpdatePermissionMode: (id: string, permissionMode: PermissionMode) => void | Promise<void>;
 }) {
+  const badge = PERMISSION_BADGES[session.permissionMode];
   return (
     <Select
       value={session.permissionMode}
       disabled={session.isRunning}
       onValueChange={(value) => onUpdatePermissionMode(session.id, value as PermissionMode)}
     >
-      <SelectTrigger className="h-8 w-40 text-xs">
-        <SelectValue />
+      <SelectTrigger
+        className={cn(
+          'h-7 gap-1.5 rounded-full border-0 bg-transparent px-2.5 text-xs ring-1 ring-inset focus:ring-2 focus:ring-offset-0',
+          badge.cls
+        )}
+      >
+        <ShieldCheck className="h-3.5 w-3.5" />
+        <span className="truncate">{badge.label}</span>
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="default">Default</SelectItem>
         <SelectItem value="plan">Plan</SelectItem>
         <SelectItem value="acceptEdits">Accept edits</SelectItem>
-        <SelectItem value="bypass">Bypass</SelectItem>
+        <SelectItem value="bypass">Full access (bypass)</SelectItem>
       </SelectContent>
     </Select>
-  );
-}
-
-function ModelStatus({ session }: { session: SessionRecord }) {
-  return (
-    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-      <span>Requested: {session.model || 'default'}</span>
-      <span>
-        Actual: {session.observedModel ? session.observedModel : session.isRunning ? 'waiting for stream' : 'not reported yet'}
-      </span>
-    </div>
   );
 }
 
@@ -484,6 +474,7 @@ export function ChatView({
   onUpdatePermissionMode,
   onRespondPermission,
   onStopRun,
+  onRename,
   onClose
 }: ChatViewProps) {
   const [draft, setDraft] = useState('');
@@ -491,8 +482,13 @@ export function ChatView({
   const [fileSuggestions, setFileSuggestions] = useState<FileMentionSuggestion[]>([]);
   const [slashSuggestions, setSlashSuggestions] = useState<SlashSuggestion[]>([]);
   const [selectedCompletion, setSelectedCompletion] = useState(0);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [renameDraft, setRenameDraft] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
 
   const completionItems: CompletionItem[] =
     completion?.kind === 'file' ? fileSuggestions : completion?.kind === 'slash' ? slashSuggestions : [];
@@ -503,7 +499,42 @@ export function ChatView({
 
   useEffect(() => {
     inputRef.current?.focus();
+    setMenuOpen(false);
+    setRenaming(false);
   }, [session.id]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onPointerDown(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (renaming) {
+      renameInputRef.current?.focus();
+      renameInputRef.current?.select();
+    }
+  }, [renaming]);
+
+  const headerTitle = session.title?.trim() || folderOf(session.cwd);
+
+  function beginRename() {
+    setRenameDraft(session.title ?? '');
+    setRenaming(true);
+    setMenuOpen(false);
+  }
+
+  async function commitRename() {
+    const next = renameDraft.trim();
+    setRenaming(false);
+    if (next === (session.title ?? '').trim()) return;
+    await onRename(session.id, next);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -560,30 +591,102 @@ export function ChatView({
     await onSendMessage(session.id, text);
   }
 
+  const folder = folderOf(session.cwd);
+  const resolvedProfile = profile ?? config.profiles.find((p) => p.id === session.profileId);
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
-      <div className="flex items-center justify-between border-b border-border bg-card px-4 py-2">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-medium">{labelFor(session)}</div>
-          <ModelStatus session={session} />
-        </div>
-        <div className="flex items-center gap-2">
-          <ModelPicker
-            session={session}
-            profile={profile ?? config.profiles.find((p) => p.id === session.profileId)}
-            onUpdateModel={onUpdateModel}
-          />
-          <PermissionModePicker session={session} onUpdatePermissionMode={onUpdatePermissionMode} />
-          {session.isRunning && (
-            <Button variant="outline" size="sm" onClick={() => onStopRun(session.id)}>
-              <CircleStop className="h-4 w-4" /> Stop
-            </Button>
+      <header className="flex items-center justify-between gap-3 border-b border-border/60 px-5 py-3">
+        <div className="relative flex min-w-0 items-center gap-2" ref={menuRef}>
+          {renaming ? (
+            <input
+              ref={renameInputRef}
+              value={renameDraft}
+              onChange={(e) => setRenameDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void commitRename();
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  setRenaming(false);
+                }
+              }}
+              onBlur={() => void commitRename()}
+              placeholder="Conversation title"
+              className="min-w-[12rem] max-w-[28rem] flex-1 rounded-md border border-border/60 bg-background/40 px-2 py-1 text-sm font-medium outline-none focus:border-border"
+            />
+          ) : (
+            <h1 className="truncate text-sm font-medium text-foreground/95" title={session.cwd}>
+              {headerTitle}
+            </h1>
           )}
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            <X className="h-4 w-4" /> End
-          </Button>
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            title="Conversation options"
+            className={cn(
+              'rounded p-1 text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+              menuOpen && 'bg-accent/60 text-foreground'
+            )}
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
+          {menuOpen && (
+            <div className="absolute left-0 top-full z-30 mt-1 w-48 overflow-hidden rounded-md border border-border bg-popover shadow-lg">
+              <button
+                type="button"
+                onClick={beginRename}
+                className="block w-full px-3 py-2 text-left text-sm hover:bg-accent/70"
+              >
+                Rename conversation
+              </button>
+              {session.titleManual && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setMenuOpen(false);
+                    await onRename(session.id, '');
+                  }}
+                  className="block w-full px-3 py-2 text-left text-sm text-muted-foreground hover:bg-accent/70 hover:text-foreground"
+                >
+                  Reset to auto title
+                </button>
+              )}
+            </div>
+          )}
         </div>
-      </div>
+        <div className="flex items-center gap-1">
+          {session.isRunning && (
+            <button
+              type="button"
+              onClick={() => onStopRun(session.id)}
+              title="Stop run"
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+            >
+              <CircleStop className="h-4 w-4" />
+            </button>
+          )}
+          {!session.isRunning && (
+            <button
+              type="button"
+              onClick={() => inputRef.current?.focus()}
+              title="Focus input"
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+            >
+              <Play className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            title="End session"
+            className="rounded-md p-1.5 text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </header>
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-6">
         {session.messages.length === 0 ? (
@@ -606,9 +709,9 @@ export function ChatView({
 
       <PermissionPrompt session={session} onRespondPermission={onRespondPermission} />
 
-      <form onSubmit={submit} className="border-t border-border bg-card p-4">
-        <div className="mx-auto flex max-w-4xl items-end gap-3">
-          <div className="relative flex-1">
+      <form onSubmit={submit} className="px-5 pb-3 pt-2">
+        <div className="mx-auto max-w-4xl">
+          <div className="relative rounded-2xl border border-border/60 bg-card/70 shadow-sm focus-within:border-border">
             <CompletionMenu
               trigger={completion}
               items={completionItems}
@@ -637,7 +740,9 @@ export function ChatView({
                   }
                   if (e.key === 'ArrowUp') {
                     e.preventDefault();
-                    setSelectedCompletion((index) => (index - 1 + completionItems.length) % completionItems.length);
+                    setSelectedCompletion(
+                      (index) => (index - 1 + completionItems.length) % completionItems.length
+                    );
                     return;
                   }
                   if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
@@ -656,16 +761,61 @@ export function ChatView({
                   void submit();
                 }
               }}
-              placeholder="Ask Claude Code to inspect, edit, run, or explain..."
+              placeholder="Ask for follow-up changes"
               rows={1}
               disabled={session.isRunning}
-              className="max-h-40 min-h-11 w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm leading-6 outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+              className="block max-h-40 min-h-12 w-full resize-none rounded-2xl bg-transparent px-4 pb-12 pt-3 text-sm leading-6 outline-none placeholder:text-muted-foreground/70 disabled:cursor-not-allowed disabled:opacity-60"
             />
+
+            <div className="pointer-events-none absolute inset-x-2 bottom-1.5 flex items-center justify-between gap-2">
+              <div className="pointer-events-auto flex items-center gap-1">
+                <button
+                  type="button"
+                  title="Add context"
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+                <PermissionModePicker
+                  session={session}
+                  onUpdatePermissionMode={onUpdatePermissionMode}
+                />
+              </div>
+              <div className="pointer-events-auto flex items-center gap-1">
+                <ModelPicker
+                  session={session}
+                  profile={resolvedProfile}
+                  onUpdateModel={onUpdateModel}
+                />
+                <button
+                  type="submit"
+                  disabled={!draft.trim() || session.isRunning}
+                  className="flex h-8 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
+                  title="Send"
+                >
+                  {session.isRunning ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
-          <Button type="submit" disabled={!draft.trim() || session.isRunning} className="h-11 px-4">
-            {session.isRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            Send
-          </Button>
+
+          <div className="mt-2 flex items-center justify-between px-1 text-[11px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              Work locally
+            </span>
+            <span
+              className="inline-flex max-w-[60%] items-center gap-1.5 truncate"
+              title={session.cwd}
+            >
+              <FolderGit2 className="h-3.5 w-3.5" />
+              <span className="truncate">{folder}</span>
+            </span>
+          </div>
         </div>
       </form>
     </div>

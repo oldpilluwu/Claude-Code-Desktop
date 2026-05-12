@@ -72,9 +72,12 @@ export function saveTranscript(transcript: SessionTranscript): boolean {
   const file = transcriptPath(transcript.id);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(transcript, null, 2));
-  patchSession(transcript.id, {
+  const patch: Partial<SessionMeta> = {
     model: transcript.model,
     permissionMode: transcript.permissionMode
-  });
+  };
+  if (transcript.title !== undefined) patch.title = transcript.title;
+  if (transcript.titleManual !== undefined) patch.titleManual = transcript.titleManual;
+  patchSession(transcript.id, patch);
   return true;
 }
