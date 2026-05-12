@@ -1,12 +1,27 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { app } from 'electron';
-import * as pty from 'node-pty';
 import { resolveBinary, buildSpawnTarget } from './binary';
-import type { CreateSessionOptions, PermissionMode, ProviderProfile, SessionHandle } from '../shared/types';
+import { ensurePermissionBridge } from './permissions';
+import type {
+  ClaudeOutputEvent,
+  CreateSessionOptions,
+  PermissionMode,
+  ProviderProfile,
+  SessionHandle
+} from '../shared/types';
 
-const sessions = new Map<string, pty.IPty>();
+interface RuntimeSession {
+  opts: CreateSessionOptions;
+  binary: string;
+  configDir: string;
+  proc: ChildProcessWithoutNullStreams | null;
+  stdoutRemainder: string;
+}
+
+const sessions = new Map<string, RuntimeSession>();
 
 // Entries under ~/.claude that we seed each per-session config dir with
 // on first creation. Excludes transcripts, todos, shell snapshots, telemetry,
@@ -140,7 +155,18 @@ function buildArgs(
   permissionMode: PermissionMode,
   resume: boolean
 ): string[] {
-  const args: string[] = [];
+  const args: string[] = [
+    '--print',
+    '--output-format',
+    'stream-json',
+    '--verbose',
+    '--include-partial-messages',
+    '--include-hook-events',
+    '--permission-prompt-tool',
+    'mcp__srclaude_permissions__approval_prompt',
+    '--allowedTools',
+    'mcp__srclaude_permissions__approval_prompt'
+  ];
   if (resume) args.push('--resume', sessionId);
   else args.push('--session-id', sessionId);
   if (model) args.push('--model', model);
@@ -157,10 +183,10 @@ export class BinaryNotFoundError extends Error {
 
 export function createSession(
   opts: CreateSessionOptions,
-  onData: (id: string, data: string) => void,
-  onExit: (id: string, exitCode: number) => void
+  _onData: (id: string, event: ClaudeOutputEvent) => void,
+  _onExit: (id: string, exitCode: number) => void
 ): SessionHandle {
-  const { sessionId, cwd, profile, model, permissionMode, claudeBinary, cols, rows, resume } = opts;
+  const { sessionId, claudeBinary, resume } = opts;
 
   const requested = (claudeBinary || 'claude').trim();
   const resolved = resolveBinary(requested);
@@ -170,47 +196,145 @@ export function createSession(
     throw new Error(`Session ${sessionId} is already running.`);
   }
 
-  const baseArgs = buildArgs(sessionId, model, permissionMode, Boolean(resume));
-  const { command, args } = buildSpawnTarget(resolved, baseArgs);
-
   const configDir = ensureSessionConfigDir(sessionId);
   syncAuthIn(configDir);
   if (resume) migrateTranscript(sessionId, configDir);
-  const env = buildEnv(profile, configDir);
   const id = sessionId;
 
-  const proc = pty.spawn(command, args, {
-    name: 'xterm-256color',
-    cols: cols || 100,
-    rows: rows || 30,
-    cwd: cwd || process.cwd(),
-    env: env as { [key: string]: string }
+  sessions.set(id, {
+    opts,
+    binary: resolved,
+    configDir,
+    proc: null,
+    stdoutRemainder: ''
   });
 
-  sessions.set(id, proc);
-  proc.onData((data) => onData(id, data));
-  proc.onExit(({ exitCode }) => {
-    sessions.delete(id);
-    syncAuthOut(configDir);
-    onExit(id, exitCode);
+  return { id, pid: 0 };
+}
+
+function emitText(
+  id: string,
+  source: 'stdout' | 'stderr',
+  text: string,
+  onData: (id: string, event: ClaudeOutputEvent) => void
+): void {
+  if (!text) return;
+  onData(id, { source, kind: 'text', text, receivedAt: Date.now() });
+}
+
+function emitStdoutChunk(
+  session: RuntimeSession,
+  id: string,
+  chunk: string,
+  onData: (id: string, event: ClaudeOutputEvent) => void
+): void {
+  session.stdoutRemainder += chunk;
+  const lines = session.stdoutRemainder.split(/\r?\n/);
+  session.stdoutRemainder = lines.pop() ?? '';
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      onData(id, {
+        source: 'stdout',
+        kind: 'json',
+        data: JSON.parse(trimmed),
+        line: trimmed,
+        receivedAt: Date.now()
+      });
+    } catch {
+      onData(id, {
+        source: 'stdout',
+        kind: 'parse_error',
+        text: trimmed,
+        line: trimmed,
+        receivedAt: Date.now()
+      });
+    }
+  }
+}
+
+export function sendMessageToSession(
+  id: string,
+  message: string,
+  onData: (id: string, event: ClaudeOutputEvent) => void,
+  onExit: (id: string, exitCode: number) => void
+): void {
+  const session = sessions.get(id);
+  if (!session) throw new Error(`Session ${id} is not available.`);
+  if (session.proc) throw new Error('Claude is still responding. Stop the current run before sending another message.');
+
+  const resume = Boolean(session.opts.resume) || sessionHasTranscript(id);
+  const args = buildArgs(id, session.opts.model, session.opts.permissionMode, resume);
+  const permissionBridge = ensurePermissionBridge(id);
+  args.push('--mcp-config', permissionBridge.configPath);
+  const target = buildSpawnTarget(session.binary, args);
+  syncAuthIn(session.configDir);
+  const env = buildEnv(session.opts.profile, session.configDir);
+  session.stdoutRemainder = '';
+
+  const proc = spawn(target.command, target.args, {
+    cwd: session.opts.cwd || process.cwd(),
+    env,
+    windowsHide: true
+  });
+  session.proc = proc;
+
+  proc.stdout.setEncoding('utf8');
+  proc.stderr.setEncoding('utf8');
+  proc.stdout.on('data', (data: string) => emitStdoutChunk(session, id, data, onData));
+  proc.stderr.on('data', (data: string) => emitText(id, 'stderr', data, onData));
+  proc.on('error', (err) => {
+    onData(id, {
+      source: 'stderr',
+      kind: 'text',
+      text: err.message,
+      receivedAt: Date.now()
+    });
+  });
+  proc.on('close', (exitCode) => {
+    if (session.stdoutRemainder.trim()) {
+      emitStdoutChunk(session, id, '\n', onData);
+    }
+    session.proc = null;
+    session.opts = { ...session.opts, resume: true };
+    syncAuthOut(session.configDir);
+    onExit(id, exitCode ?? 0);
   });
 
-  return { id, pid: proc.pid };
+  proc.stdin.end(message);
 }
 
-export function writeToSession(id: string, data: string): void {
-  sessions.get(id)?.write(data);
+export function writeToSession(_id: string, _data: string): void {
+  // Retained for older renderer builds. Chat mode sends complete messages via sendMessageToSession.
 }
 
-export function resizeSession(id: string, cols: number, rows: number): void {
-  const s = sessions.get(id);
-  if (!s) return;
-  try { s.resize(cols, rows); } catch { /* ignore */ }
+export function resizeSession(_id: string, _cols: number, _rows: number): void {
+  // No visible terminal is attached in chat mode.
 }
 
 export function killSession(id: string): void {
   const s = sessions.get(id);
   if (!s) return;
-  try { s.kill(); } catch { /* ignore */ }
+  try { s.proc?.kill(); } catch { /* ignore */ }
   sessions.delete(id);
+}
+
+export function stopSessionRun(id: string): void {
+  const s = sessions.get(id);
+  if (!s?.proc) return;
+  try { s.proc.kill(); } catch { /* ignore */ }
+}
+
+export function updateSessionModel(id: string, model: string): void {
+  const session = sessions.get(id);
+  if (!session) return;
+  session.opts = { ...session.opts, model };
+}
+
+export function updateSessionPermissionMode(id: string, permissionMode: PermissionMode): void {
+  const session = sessions.get(id);
+  if (!session) return;
+  session.opts = { ...session.opts, permissionMode };
 }

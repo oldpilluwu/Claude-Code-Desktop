@@ -23,11 +23,11 @@ function folderName(cwd: string): string {
 }
 
 function liveLabel(s: SessionRecord): string {
-  return `${folderName(s.cwd)} · ${s.model || 'default'}`;
+  return `${folderName(s.cwd)} - ${s.model || 'default'}`;
 }
 
 function archivedLabel(m: SessionMeta): string {
-  return `${folderName(m.cwd)} · ${m.model || 'default'}`;
+  return `${folderName(m.cwd)} - ${m.model || 'default'}`;
 }
 
 export function Sidebar({
@@ -75,10 +75,12 @@ export function Sidebar({
                       'shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium uppercase',
                       item.record.exited
                         ? 'bg-destructive/20 text-destructive'
-                        : 'bg-emerald-500/20 text-emerald-400'
+                        : item.record.isRunning
+                          ? 'bg-amber-500/20 text-amber-300'
+                          : 'bg-emerald-500/20 text-emerald-400'
                     )}
                   >
-                    {item.record.exited ? 'ended' : 'live'}
+                    {item.record.exited ? 'ended' : item.record.isRunning ? 'busy' : 'ready'}
                   </span>
                 </button>
               </li>

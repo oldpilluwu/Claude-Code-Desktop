@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Sidebar, type SidebarItem } from '@/components/Sidebar';
 import { WelcomeView } from '@/components/WelcomeView';
-import { TerminalView } from '@/components/TerminalView';
+import { ChatView } from '@/components/ChatView';
 import { SettingsView } from '@/components/SettingsView';
 import { useConfig } from '@/hooks/useConfig';
 import { useSessions } from '@/hooks/useSessions';
 import type { AppConfig, LaunchRequest, SessionMeta } from '@shared/types';
 
-type View = 'welcome' | 'terminal' | 'settings';
+type View = 'welcome' | 'chat' | 'settings';
 
 export function App() {
   const { config, save, loading } = useConfig();
@@ -37,7 +37,7 @@ export function App() {
   async function handleLaunch(req: LaunchRequest) {
     const session = await sessions.launch(req);
     setActiveSessionId(session.id);
-    setView('terminal');
+    setView('chat');
   }
 
   async function handleResume(meta: SessionMeta) {
@@ -60,7 +60,7 @@ export function App() {
         rows: 30
       });
       setActiveSessionId(session.id);
-      setView('terminal');
+      setView('chat');
     } catch (e) {
       setResumeError(e instanceof Error ? e.message : String(e));
       setView('welcome');
@@ -69,7 +69,7 @@ export function App() {
 
   function handleSelectSession(id: string) {
     setActiveSessionId(id);
-    setView('terminal');
+    setView('chat');
   }
 
   function handleNewSession() {
@@ -89,6 +89,9 @@ export function App() {
   }
 
   const activeSession = activeSessionId ? sessions.get(activeSessionId) : null;
+  const activeProfile = activeSession
+    ? config.profiles.find((profile) => profile.id === activeSession.profileId)
+    : undefined;
 
   return (
     <div className="flex h-full">
@@ -105,10 +108,20 @@ export function App() {
         {view === 'welcome' && (
           <WelcomeView config={config} onLaunch={handleLaunch} resumeError={resumeError} />
         )}
-        {view === 'terminal' && activeSession && (
-          <TerminalView session={activeSession} onClose={handleCloseSession} />
+        {view === 'chat' && activeSession && (
+          <ChatView
+            session={activeSession}
+            config={config}
+            profile={activeProfile}
+            onSendMessage={sessions.sendMessage}
+            onUpdateModel={sessions.updateModel}
+            onUpdatePermissionMode={sessions.updatePermissionMode}
+            onRespondPermission={sessions.respondPermission}
+            onStopRun={sessions.stopRun}
+            onClose={handleCloseSession}
+          />
         )}
-        {view === 'terminal' && !activeSession && (
+        {view === 'chat' && !activeSession && (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             Session ended
           </div>

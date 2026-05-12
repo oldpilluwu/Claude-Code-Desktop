@@ -1,10 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
-import type { SessionMeta } from '../shared/types';
+import type { SessionMeta, SessionTranscript } from '../shared/types';
 
 function sessionsPath(): string {
   return path.join(app.getPath('userData'), 'sessions.json');
+}
+
+function transcriptPath(id: string): string {
+  return path.join(app.getPath('userData'), 'chat-transcripts', `${id}.json`);
 }
 
 function readAll(): SessionMeta[] {
@@ -42,7 +46,35 @@ export function touchSession(id: string, lastActiveAt: number): void {
   writeAll(all);
 }
 
+export function patchSession(id: string, patch: Partial<SessionMeta>): void {
+  const all = readAll();
+  const idx = all.findIndex((m) => m.id === id);
+  if (idx < 0) return;
+  all[idx] = { ...all[idx], ...patch, lastActiveAt: Date.now() };
+  writeAll(all);
+}
+
 export function removeSession(id: string): void {
   const all = readAll().filter((m) => m.id !== id);
   writeAll(all);
+  try { fs.rmSync(transcriptPath(id), { force: true }); } catch { /* ignore */ }
+}
+
+export function loadTranscript(id: string): SessionTranscript | null {
+  try {
+    return JSON.parse(fs.readFileSync(transcriptPath(id), 'utf-8')) as SessionTranscript;
+  } catch {
+    return null;
+  }
+}
+
+export function saveTranscript(transcript: SessionTranscript): boolean {
+  const file = transcriptPath(transcript.id);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(transcript, null, 2));
+  patchSession(transcript.id, {
+    model: transcript.model,
+    permissionMode: transcript.permissionMode
+  });
+  return true;
 }
