@@ -3,10 +3,10 @@ import path from 'node:path';
 import { loadConfig, saveConfig } from './config';
 import { listModels } from './models';
 import { respondToPermission, watchPermissionRequests } from './permissions';
-import { createSession, sendMessageToSession, writeToSession, resizeSession, killSession, stopSessionRun, updateSessionModel, updateSessionPermissionMode, removeSessionConfigDir, sessionHasTranscript, BinaryNotFoundError } from './pty';
+import { createSession, sendMessageToSession, writeToSession, resizeSession, killSession, stopSessionRun, updateSessionModel, updateSessionPermissionMode, updateSessionThinkingEffort, removeSessionConfigDir, sessionHasTranscript, BinaryNotFoundError } from './pty';
 import { listSessions, upsertSession, touchSession, patchSession, removeSession, loadTranscript, saveTranscript } from './sessions';
 import { listFileMentions, listSlashSuggestions } from './suggestions';
-import type { AppConfig, CreateSessionOptions, PermissionDecision, PermissionMode, ProviderProfile, SessionMeta, SessionTranscript } from '../shared/types';
+import type { AppConfig, CreateSessionOptions, PermissionDecision, PermissionMode, ProviderProfile, SessionMeta, SessionTranscript, ThinkingEffort } from '../shared/types';
 
 let mainWindow: BrowserWindow | null = null;
 const permissionWatchers = new Map<string, () => void>();
@@ -87,6 +87,7 @@ ipcMain.handle('session:create', (_e, opts: CreateSessionOptions) => {
       providerProfile: opts.profile,
       model: opts.model,
       permissionMode: opts.permissionMode,
+      thinkingEffort: opts.thinkingEffort,
       claudeBinary: opts.claudeBinary,
       createdAt: opts.resume ? now : now,
       lastActiveAt: now
@@ -163,6 +164,14 @@ ipcMain.handle('session:update-permission-mode', (_e, { id, permissionMode }: { 
   const pending = pendingMetas.get(id);
   if (pending) pending.permissionMode = permissionMode;
   else patchSession(id, { permissionMode });
+  return true;
+});
+
+ipcMain.handle('session:update-thinking-effort', (_e, { id, thinkingEffort }: { id: string; thinkingEffort: ThinkingEffort }) => {
+  updateSessionThinkingEffort(id, thinkingEffort);
+  const pending = pendingMetas.get(id);
+  if (pending) pending.thinkingEffort = thinkingEffort;
+  else patchSession(id, { thinkingEffort });
   return true;
 });
 

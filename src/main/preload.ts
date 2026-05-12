@@ -13,7 +13,8 @@ import type {
   SessionHandle,
   SessionMeta,
   SessionTranscript,
-  SlashSuggestion
+  SlashSuggestion,
+  ThinkingEffort
 } from '../shared/types';
 
 const api = {
@@ -35,6 +36,8 @@ const api = {
     ipcRenderer.invoke('session:update-model', { id, model }),
   updateSessionPermissionMode: (id: string, permissionMode: PermissionMode): Promise<boolean> =>
     ipcRenderer.invoke('session:update-permission-mode', { id, permissionMode }),
+  updateSessionThinkingEffort: (id: string, thinkingEffort: ThinkingEffort): Promise<boolean> =>
+    ipcRenderer.invoke('session:update-thinking-effort', { id, thinkingEffort }),
   writeSession: (id: string, data: string): void => ipcRenderer.send('session:write', { id, data }),
   resizeSession: (id: string, cols: number, rows: number): void =>
     ipcRenderer.send('session:resize', { id, cols, rows }),

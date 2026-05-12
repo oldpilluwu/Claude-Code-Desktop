@@ -117,6 +117,7 @@ export function App() {
             onSendMessage={sessions.sendMessage}
             onUpdateModel={sessions.updateModel}
             onUpdatePermissionMode={sessions.updatePermissionMode}
+            onUpdateThinkingEffort={sessions.updateThinkingEffort}
             onRespondPermission={sessions.respondPermission}
             onStopRun={sessions.stopRun}
             onRename={sessions.renameSession}

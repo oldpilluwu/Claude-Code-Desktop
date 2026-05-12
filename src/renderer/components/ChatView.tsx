@@ -1,12 +1,12 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Brain, Check, ChevronDown, CircleStop, Code2, Command, FileText, FolderGit2, Loader2, Mic, MoreHorizontal, Play, Plus, Send, ShieldCheck, SquareTerminal, Wrench, X } from 'lucide-react';
+import { Brain, Check, ChevronDown, CircleStop, Code2, Command, FileText, FolderGit2, Lightbulb, Loader2, Mic, MoreHorizontal, Play, Plus, Send, ShieldCheck, SquareTerminal, Wrench, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import type { AppConfig, FileMentionSuggestion, ModelOption, PermissionMode, ProviderProfile, SlashSuggestion } from '@shared/types';
+import type { AppConfig, FileMentionSuggestion, ModelOption, PermissionMode, ProviderProfile, SlashSuggestion, ThinkingEffort } from '@shared/types';
 import type { ActivityKind, ChatActivity, ChatMessage, ChatPart, SessionRecord } from '@/hooks/useSessions';
 
 interface ChatViewProps {
@@ -16,6 +16,7 @@ interface ChatViewProps {
   onSendMessage: (id: string, text: string) => void | Promise<void>;
   onUpdateModel: (id: string, model: string) => void | Promise<void>;
   onUpdatePermissionMode: (id: string, permissionMode: PermissionMode) => void | Promise<void>;
+  onUpdateThinkingEffort: (id: string, thinkingEffort: ThinkingEffort) => void | Promise<void>;
   onRespondPermission: (id: string, allow: boolean, message?: string) => void | Promise<void>;
   onStopRun: (id: string) => void;
   onRename: (id: string, title: string) => void | Promise<void>;
@@ -31,6 +32,15 @@ const PERMISSION_BADGES: Record<PermissionMode, { label: string; cls: string }> 
   plan: { label: 'Plan mode', cls: 'text-sky-300/90 ring-sky-500/40' },
   acceptEdits: { label: 'Accept edits', cls: 'text-amber-300/90 ring-amber-500/40' },
   bypass: { label: 'Full access', cls: 'text-rose-300/90 ring-rose-500/40' }
+};
+
+const THINKING_LABELS: Record<ThinkingEffort, string> = {
+  off: 'Think: off',
+  low: 'Think: low',
+  medium: 'Think: medium',
+  high: 'Think: high',
+  xhigh: 'Think: xhigh',
+  max: 'Think: max'
 };
 
 function iconFor(kind: ActivityKind) {
@@ -416,6 +426,46 @@ function PermissionModePicker({
   );
 }
 
+function ThinkingEffortPicker({
+  session,
+  onUpdateThinkingEffort
+}: {
+  session: SessionRecord;
+  onUpdateThinkingEffort: (id: string, thinkingEffort: ThinkingEffort) => void | Promise<void>;
+}) {
+  const value = session.thinkingEffort ?? 'off';
+  const label = THINKING_LABELS[value];
+  const active = value !== 'off';
+  return (
+    <Select
+      value={value}
+      disabled={session.isRunning}
+      onValueChange={(v) => onUpdateThinkingEffort(session.id, v as ThinkingEffort)}
+    >
+      <SelectTrigger
+        title="Extended thinking budget (MAX_THINKING_TOKENS)"
+        className={cn(
+          'h-7 gap-1.5 rounded-full border-0 bg-transparent px-2.5 text-xs ring-1 ring-inset focus:ring-2 focus:ring-offset-0',
+          active
+            ? 'text-violet-300/90 ring-violet-500/40'
+            : 'text-muted-foreground ring-border/60'
+        )}
+      >
+        <Lightbulb className="h-3.5 w-3.5" />
+        <span className="truncate">{label}</span>
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="off">Off</SelectItem>
+        <SelectItem value="low">Low</SelectItem>
+        <SelectItem value="medium">Medium</SelectItem>
+        <SelectItem value="high">High</SelectItem>
+        <SelectItem value="xhigh">XHigh</SelectItem>
+        <SelectItem value="max">Max</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
+
 function CompletionMenu({
   trigger,
   items,
@@ -472,6 +522,7 @@ export function ChatView({
   onSendMessage,
   onUpdateModel,
   onUpdatePermissionMode,
+  onUpdateThinkingEffort,
   onRespondPermission,
   onStopRun,
   onRename,
@@ -779,6 +830,10 @@ export function ChatView({
                 <PermissionModePicker
                   session={session}
                   onUpdatePermissionMode={onUpdatePermissionMode}
+                />
+                <ThinkingEffortPicker
+                  session={session}
+                  onUpdateThinkingEffort={onUpdateThinkingEffort}
                 />
               </div>
               <div className="pointer-events-auto flex items-center gap-1">

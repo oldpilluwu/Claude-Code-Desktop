@@ -13,6 +13,7 @@ const DEFAULT_CONFIG: AppConfig = {
   defaultProfileId: 'default',
   defaultModel: '',
   defaultPermissionMode: 'default',
+  defaultThinkingEffort: 'off',
   profiles: [
     {
       id: 'default',

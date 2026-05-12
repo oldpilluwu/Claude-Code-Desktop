@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
-import type { AppConfig, LaunchRequest, PermissionMode } from '@shared/types';
+import type { AppConfig, LaunchRequest, PermissionMode, ThinkingEffort } from '@shared/types';
 
 interface WelcomeViewProps {
   config: AppConfig;
@@ -19,6 +19,9 @@ export function WelcomeView({ config, onLaunch, resumeError }: WelcomeViewProps)
   const [profileId, setProfileId] = useState(config.defaultProfileId);
   const [model, setModel] = useState(config.defaultModel);
   const [permissionMode, setPermissionMode] = useState<PermissionMode>(config.defaultPermissionMode);
+  const [thinkingEffort, setThinkingEffort] = useState<ThinkingEffort>(
+    config.defaultThinkingEffort ?? 'off'
+  );
   const [error, setError] = useState<string | null>(null);
 
   const profile = useMemo(
@@ -48,6 +51,7 @@ export function WelcomeView({ config, onLaunch, resumeError }: WelcomeViewProps)
         profile,
         model,
         permissionMode,
+        thinkingEffort,
         claudeBinary: config.claudeBinary || 'claude',
         cols: 100,
         rows: 30
@@ -118,6 +122,26 @@ export function WelcomeView({ config, onLaunch, resumeError }: WelcomeViewProps)
                 <SelectItem value="plan">Plan</SelectItem>
                 <SelectItem value="acceptEdits">Accept edits</SelectItem>
                 <SelectItem value="bypass">Bypass permissions (dangerous)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Thinking effort</Label>
+            <Select
+              value={thinkingEffort}
+              onValueChange={(v) => setThinkingEffort(v as ThinkingEffort)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="off">Off</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="xhigh">XHigh</SelectItem>
+                <SelectItem value="max">Max</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -10,8 +10,10 @@ import type {
   CreateSessionOptions,
   PermissionMode,
   ProviderProfile,
-  SessionHandle
+  SessionHandle,
+  ThinkingEffort
 } from '../shared/types';
+import { THINKING_BUDGETS } from '../shared/types';
 
 interface RuntimeSession {
   opts: CreateSessionOptions;
@@ -135,7 +137,11 @@ const PERMISSION_FLAGS: Record<PermissionMode, string[]> = {
   bypass: ['--dangerously-skip-permissions']
 };
 
-function buildEnv(profile: ProviderProfile, configDir: string): NodeJS.ProcessEnv {
+function buildEnv(
+  profile: ProviderProfile,
+  configDir: string,
+  thinkingEffort?: ThinkingEffort
+): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
   env.CLAUDE_CONFIG_DIR = configDir;
   if (profile.baseUrl) env.ANTHROPIC_BASE_URL = profile.baseUrl;
@@ -145,6 +151,12 @@ function buildEnv(profile: ProviderProfile, configDir: string): NodeJS.ProcessEn
     for (const [k, v] of Object.entries(profile.extraEnv)) {
       if (v !== undefined && v !== null) env[k] = String(v);
     }
+  }
+  const budget = thinkingEffort ? THINKING_BUDGETS[thinkingEffort] : 0;
+  if (budget > 0) {
+    env.MAX_THINKING_TOKENS = String(budget);
+  } else {
+    delete env.MAX_THINKING_TOKENS;
   }
   return env;
 }
@@ -271,7 +283,7 @@ export function sendMessageToSession(
   args.push('--mcp-config', permissionBridge.configPath);
   const target = buildSpawnTarget(session.binary, args);
   syncAuthIn(session.configDir);
-  const env = buildEnv(session.opts.profile, session.configDir);
+  const env = buildEnv(session.opts.profile, session.configDir, session.opts.thinkingEffort);
   session.stdoutRemainder = '';
 
   const proc = spawn(target.command, target.args, {
@@ -337,4 +349,10 @@ export function updateSessionPermissionMode(id: string, permissionMode: Permissi
   const session = sessions.get(id);
   if (!session) return;
   session.opts = { ...session.opts, permissionMode };
+}
+
+export function updateSessionThinkingEffort(id: string, thinkingEffort: ThinkingEffort): void {
+  const session = sessions.get(id);
+  if (!session) return;
+  session.opts = { ...session.opts, thinkingEffort };
 }

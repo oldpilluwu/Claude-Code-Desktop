@@ -10,7 +10,8 @@ import type {
   PersistedChatMessage,
   PersistedChatPart,
   SessionMeta,
-  SessionTranscript
+  SessionTranscript,
+  ThinkingEffort
 } from '@shared/types';
 
 export type ChatRole = 'user' | 'assistant' | 'system';
@@ -45,6 +46,7 @@ export interface SessionRecord {
   cwd: string;
   model: string;
   permissionMode: PermissionMode;
+  thinkingEffort: ThinkingEffort;
   profileId: string;
   exited: boolean;
   isRunning: boolean;
@@ -313,6 +315,7 @@ function transcriptFromRecord(record: SessionRecord): SessionTranscript {
     model: record.model,
     observedModel: record.observedModel,
     permissionMode: record.permissionMode,
+    thinkingEffort: record.thinkingEffort,
     updatedAt: Date.now(),
     title: record.title,
     titleManual: record.titleManual
@@ -487,6 +490,7 @@ export function useSessions() {
   }, []);
 
   const saveNow = useCallback((record: SessionRecord) => {
+    if (record.messages.length === 0) return;
     void api.saveTranscript(transcriptFromRecord(record));
   }, []);
 
@@ -565,6 +569,7 @@ export function useSessions() {
         model: transcript?.model ?? opts.model,
         observedModel: transcript?.observedModel,
         permissionMode: transcript?.permissionMode ?? opts.permissionMode,
+        thinkingEffort: transcript?.thinkingEffort ?? opts.thinkingEffort ?? 'off',
         profileId: opts.profile.id,
         exited: false,
         isRunning: false,
@@ -653,6 +658,18 @@ export function useSessions() {
       if (!session || session.isRunning) return;
       session.permissionMode = permissionMode;
       await api.updateSessionPermissionMode(id, permissionMode);
+      saveNow(session);
+      rerender();
+    },
+    [rerender, saveNow]
+  );
+
+  const updateThinkingEffort = useCallback(
+    async (id: string, thinkingEffort: ThinkingEffort) => {
+      const session = sessionsRef.current.get(id);
+      if (!session || session.isRunning) return;
+      session.thinkingEffort = thinkingEffort;
+      await api.updateSessionThinkingEffort(id, thinkingEffort);
       saveNow(session);
       rerender();
     },
@@ -761,6 +778,7 @@ export function useSessions() {
     sendMessage,
     updateModel,
     updatePermissionMode,
+    updateThinkingEffort,
     respondPermission,
     stopRun,
     kill,

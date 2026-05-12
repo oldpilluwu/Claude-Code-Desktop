@@ -76,6 +76,7 @@ export function saveTranscript(transcript: SessionTranscript): boolean {
     model: transcript.model,
     permissionMode: transcript.permissionMode
   };
+  if (transcript.thinkingEffort !== undefined) patch.thinkingEffort = transcript.thinkingEffort;
   if (transcript.title !== undefined) patch.title = transcript.title;
   if (transcript.titleManual !== undefined) patch.titleManual = transcript.titleManual;
   patchSession(transcript.id, patch);

@@ -1,5 +1,16 @@
 export type PermissionMode = 'default' | 'plan' | 'acceptEdits' | 'bypass';
 
+export type ThinkingEffort = 'off' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+export const THINKING_BUDGETS: Record<ThinkingEffort, number> = {
+  off: 0,
+  low: 4000,
+  medium: 10000,
+  high: 16000,
+  xhigh: 24000,
+  max: 31999
+};
+
 export interface ModelOption {
   id: string;
   label: string;
@@ -38,6 +49,7 @@ export interface AppConfig {
   defaultProfileId: string;
   defaultModel: string;
   defaultPermissionMode: PermissionMode;
+  defaultThinkingEffort?: ThinkingEffort;
   profiles: ProviderProfile[];
 }
 
@@ -47,6 +59,7 @@ export interface CreateSessionOptions {
   profile: ProviderProfile;
   model: string;
   permissionMode: PermissionMode;
+  thinkingEffort?: ThinkingEffort;
   claudeBinary: string;
   cols: number;
   rows: number;
@@ -67,6 +80,7 @@ export interface SessionMeta {
   providerProfile?: ProviderProfile;
   model: string;
   permissionMode: PermissionMode;
+  thinkingEffort?: ThinkingEffort;
   claudeBinary: string;
   createdAt: number;
   lastActiveAt: number;
@@ -102,6 +116,7 @@ export interface SessionTranscript {
   model: string;
   observedModel?: string;
   permissionMode: PermissionMode;
+  thinkingEffort?: ThinkingEffort;
   updatedAt: number;
   title?: string;
   titleManual?: boolean;
