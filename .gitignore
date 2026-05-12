@@ -7,5 +7,8 @@ Thumbs.db
 .env
 .env.local
 config.json
+
+# Local Claude config and project notes
+.claude
 .claude/
 PRD.md
