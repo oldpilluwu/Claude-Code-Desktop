@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(where.exe claude *)",
+      "Bash(npm install *)",
+      "Bash(npx electron-rebuild *)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(ls -la \"/c/Users/fawwa/.local/bin/\" 2>&1 | grep -i claude)",
+      "Read(//c/Users/fawwa/**)",
+      "Read(//c/Users/fawwa/.claude/**)",
+      "Bash(node -e \"const d = JSON.parse\\(require\\('fs'\\).readFileSync\\(require\\('os'\\).homedir\\(\\) + '/.claude.json', 'utf8'\\)\\); console.log\\(Object.keys\\(d\\).join\\('\\\\n'\\)\\);\")",
+      "Bash(node -e \"const d = JSON.parse\\(require\\('fs'\\).readFileSync\\(require\\('os'\\).homedir\\(\\) + '/.claude.json', 'utf8'\\)\\); ['oauthAccount','userID','opusProMigrationComplete','hasCompletedOnboarding','s1mAccessCache','model'].forEach\\(k => console.log\\(k, '=>', typeof d[k], d[k] && \\(typeof d[k] === 'object' ? Object.keys\\(d[k]\\).join\\(','\\) : d[k]\\)\\)\\);\")"
+    ]
+  }
+}
