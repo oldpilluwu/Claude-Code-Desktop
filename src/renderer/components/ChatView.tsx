@@ -549,6 +549,13 @@ export function ChatView({
   }, [session.messages, session.isRunning]);
 
   useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [draft]);
+
+  useEffect(() => {
     inputRef.current?.focus();
     setMenuOpen(false);
     setRenaming(false);
@@ -815,7 +822,8 @@ export function ChatView({
               placeholder="Ask for follow-up changes"
               rows={1}
               disabled={session.isRunning}
-              className="block max-h-40 min-h-12 w-full resize-none rounded-2xl bg-transparent px-4 pb-12 pt-3 text-sm leading-6 outline-none placeholder:text-muted-foreground/70 disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              className="block min-h-12 w-full resize-none overflow-hidden rounded-2xl bg-transparent px-4 pb-12 pt-3 text-sm leading-6 outline-none placeholder:text-muted-foreground/70 disabled:cursor-not-allowed disabled:opacity-60 [&::-webkit-scrollbar]:hidden"
             />
 
             <div className="pointer-events-none absolute inset-x-2 bottom-1.5 flex items-center justify-between gap-2">
