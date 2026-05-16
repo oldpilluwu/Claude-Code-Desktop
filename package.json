@@ -11,10 +11,48 @@
     "build:renderer": "vite build",
     "build": "npm run build:main && npm run build:renderer",
     "start": "npm run build && electron .",
+    "dist": "npm run build && electron-builder",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:linux": "npm run build && electron-builder --linux tar.gz",
+    "dist:linux:packages": "npm run build && electron-builder --linux AppImage deb rpm",
     "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit"
   },
   "author": "",
   "license": "MIT",
+  "build": {
+    "appId": "srclaude.desktop",
+    "productName": "SRClaude",
+    "directories": {
+      "output": "../SRClaude-installers"
+    },
+    "files": [
+      "dist/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "assets/app-icon.ico",
+      "signAndEditExecutable": false,
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "linux": {
+      "icon": "assets",
+      "category": "Development",
+      "maintainer": "SRClaude Maintainers <maintainers@srclaude.local>",
+      "target": [
+        "tar.gz"
+      ]
+    }
+  },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "@types/react": "^18.3.12",
@@ -24,6 +62,7 @@
     "concurrently": "^9.1.0",
     "cross-env": "^7.0.3",
     "electron": "^33.0.0",
+    "electron-builder": "^26.8.1",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.15",
     "typescript": "^5.7.2",

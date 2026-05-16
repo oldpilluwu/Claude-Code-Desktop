@@ -118,7 +118,7 @@ npm install
 npm run build
 ```
 
-7. Start the built app:
+5. Start the built app:
 
 ```bash
 npm start
@@ -128,7 +128,7 @@ The compiled files are written to `dist/main` and `dist/renderer`.
 
 ## Packaging For Easy Installation
 
-The current project build creates compiled Electron files, but it does not yet create a one-click installer. To distribute the app to users who do not want to run code or commands, package it as normal desktop installer files and publish those files in a release.
+The project uses Electron Builder to create distributable desktop artifacts. Generated files are written to `../SRClaude-installers` so the app bundle does not get caught by editor file watchers inside the repo.
 
 Recommended release artifacts:
 
@@ -137,48 +137,27 @@ Recommended release artifacts:
 - Linux: `.deb` for Debian and Ubuntu users.
 - Linux: `.rpm` for Fedora, RHEL, and openSUSE users.
 
-### Recommended Packager
+### Package Commands
 
-Use Electron Builder or Electron Forge. Electron Builder is a good fit if you want simple `.exe`, `.AppImage`, `.deb`, and `.rpm` outputs from one configuration.
+Create the Windows installer and portable executable:
 
-Example package scripts to add later:
-
-```json
-{
-  "scripts": {
-    "dist": "npm run build && electron-builder",
-    "dist:win": "npm run build && electron-builder --win",
-    "dist:linux": "npm run build && electron-builder --linux"
-  }
-}
+```bash
+npm run dist:win
 ```
 
-Example Electron Builder configuration:
+Create a Linux portable archive from Windows:
 
-```json
-{
-  "build": {
-    "appId": "com.srclaude.claude-code-desktop",
-    "productName": "Claude Code Desktop",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist/**/*",
-      "package.json"
-    ],
-    "win": {
-      "target": ["nsis", "portable"]
-    },
-    "linux": {
-      "target": ["AppImage", "deb", "rpm"],
-      "category": "Development"
-    }
-  }
-}
+```bash
+npm run dist:linux
 ```
 
-After packaging is configured, maintainers can create release installers from each target platform and upload the generated files from the release output directory.
+Create Linux AppImage, deb, and rpm packages from a Linux or Docker builder with `mksquashfs` and `fpm` available:
+
+```bash
+npm run dist:linux:packages
+```
+
+Before public Linux releases, replace the placeholder Linux maintainer email in `package.json` with a real maintainer address.
 
 ## Installing Without Running Commands
 
