@@ -1,4 +1,4 @@
-# Claude Code Desktop
+# Claude Code Desktop with Local LLM
 
 Claude Code Desktop is an Electron desktop wrapper for the Claude Code CLI. It is designed for people who want the normal Claude Code terminal workflow in a desktop app while using local or custom Anthropic-compatible model providers such as Ollama, LiteLLM, vLLM, or a remote compatible endpoint.
 
@@ -81,28 +81,20 @@ npm start
 
 1. Install Node.js 20 or newer.
 2. Install the Claude Code CLI.
-3. Install Visual Studio Build Tools with the Desktop development with C++ workload. This is needed because `node-pty` uses native modules.
-4. Install Python 3 and make sure it is available on `PATH`.
-5. Open PowerShell in the project folder.
-6. Install dependencies:
+3. Open PowerShell in the project folder.
+4. Install dependencies:
 
 ```powershell
 npm install
 ```
 
-7. Rebuild native Electron dependencies if needed:
-
-```powershell
-npm run rebuild:native
-```
-
-8. Build the app:
+5. Build the app:
 
 ```powershell
 npm run build
 ```
 
-9. Start the built app:
+6. Start the built app:
 
 ```powershell
 npm start
@@ -114,34 +106,13 @@ The compiled files are written to `dist/main` and `dist/renderer`.
 
 1. Install Node.js 20 or newer.
 2. Install the Claude Code CLI.
-3. Install native build tools for `node-pty`.
-
-For Debian or Ubuntu:
-
-```bash
-sudo apt update
-sudo apt install -y build-essential python3 make g++
-```
-
-For Fedora:
-
-```bash
-sudo dnf install -y gcc-c++ make python3
-```
-
-4. Install dependencies:
+3. Install dependencies:
 
 ```bash
 npm install
 ```
 
-5. Rebuild native Electron dependencies if needed:
-
-```bash
-npm run rebuild:native
-```
-
-6. Build the app:
+4. Build the app:
 
 ```bash
 npm run build

@@ -15,6 +15,11 @@ const pendingMetas = new Map<string, SessionMeta>();
 const isDev = process.env.NODE_ENV === 'development';
 const DEV_URL = 'http://localhost:5173';
 
+function getAppIconPath(): string {
+  const iconName = process.platform === 'win32' ? 'app-icon.ico' : 'app-icon.png';
+  return path.join(app.getAppPath(), 'assets', iconName);
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -22,6 +27,7 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 600,
     title: 'Claude Code Desktop',
+    icon: getAppIconPath(),
     backgroundColor: '#0a0a0a',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -39,6 +45,7 @@ function createWindow(): void {
   }
 }
 
+app.setAppUserModelId('srclaude.desktop');
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
